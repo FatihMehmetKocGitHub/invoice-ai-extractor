@@ -1,19 +1,25 @@
 from __future__ import annotations
+import os
 from typing import Optional
 
-from app.core.config import settings
 from app.services.llm.base import LLMClient
-from app.services.llm.api_client import ApiLLMClient
-from app.services.llm.local_ollama import OllamaLLMClient
+from app.services.llm.local_ollama import OllamaLLM
+
+
+def llm_enabled() -> bool:
+    return os.getenv("USE_LLM", "0").lower() in ("1", "true", "yes", "on")
+
 
 def get_llm() -> Optional[LLMClient]:
-    mode = (settings.LLM_MODE or "").lower().strip()
-    if mode == "local":
-        return OllamaLLMClient(model=settings.OLLAMA_MODEL)
-    if mode == "api":
-        return ApiLLMClient(
-            base_url=settings.LLM_API_BASE_URL,
-            api_key=settings.LLM_API_KEY,
-            model=settings.LLM_API_MODEL,
-        )
+    if not llm_enabled():
+        return None
+
+    provider = os.getenv("LLM_PROVIDER", "ollama").lower()
+
+    if provider == "ollama":
+        base_url = os.getenv("OLLAMA_BASE_URL", "http://host.docker.internal:11434")
+        model = os.getenv("OLLAMA_MODEL", "llama3.1")
+        return OllamaLLM(base_url=base_url, model=model)
+
+    # future providers can be added here (openai, etc.)
     return None

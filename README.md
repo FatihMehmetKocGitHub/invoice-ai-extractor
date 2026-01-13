@@ -1,24 +1,35 @@
 Invoice AI Extractor
+# Invoice AI Extractor
 
-Asynchronous invoice (PDF) processing service with OCR support, rule-based extraction, and optional LLM integration.
+Asynchronous invoice (PDF) processing service with **OCR support**, **rule-based extraction**, and **optional LLM fallback**.
 
-This project exposes a REST API that accepts invoice PDFs, processes them asynchronously using Celery workers, extracts structured invoice data, and returns the results via task polling.
+The API accepts invoice PDFs, processes them asynchronously with Celery, extracts structured data (fields + line items), and returns results via task polling.
+
+## Architecture
+
 
 Client
-  │
-  ▼
-FastAPI (API)
-  │  enqueue task
-  ▼
+|
+v
+FastAPI (API) --> enqueues task
+|
+v
 Redis (broker + result backend)
-  │
-  ▼
+|
+v
 Celery Worker
-  ├─ PDF text extraction (Poppler)
-  ├─ OCR fallback (Tesseract)
-  ├─ Text normalization
-  ├─ Rule-based field & item extraction
-  └─ Validation & warnings
+
+PDF text extraction (Poppler)
+
+OCR fallback (Tesseract)
+
+Text normalization
+
+Rule-based field & item extraction
+
+Validation & warnings
+
+(Optional) LLM repair fallback
 How to Run
 Prerequisites
 

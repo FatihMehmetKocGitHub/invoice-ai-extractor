@@ -1,58 +1,51 @@
-from __future__ import annotations
+from app.services.llm.factory import get_llm
+import os
 
-import logging
-from typing import Any, Dict
+# ...
 
-from app.workers.celery_app import celery_app
-from app.storage.result_store import save_result
-from app.services.extraction.pdf_text import extract_text_from_pdf
-from app.services.extraction.ocr import ocr_pdf_if_needed
-from app.services.postprocess.normalize import normalize_text
-from app.services.agent.invoice_agent import run_agent, AgentConfig
+def _needs_llm(fields: dict, items: list, warnings: list) -> bool:
+    # kritik alanlar eksikse veya warning varsa
+    critical = ["invoice_no", "invoice_date", "subtotal", "total"]
+    missing = any(fields.get(k) in (None, "", 0) for k in critical)
+    return missing or bool(warnings)
 
-logger = logging.getLogger(__name__)
+@celery_app.task(name="process_invoice_task")
+def process_invoice_task(file_path: str):
+    print(f"[TASK] processing {file_path}")
 
+    raw = extract_text_from_pdf(file_path)
+    clean = normalize_text(raw)
 
-@celery_app.task(name="process_invoice_task", bind=True)
-def process_invoice_task(self, file_path: str) -> Dict[str, Any]:
-    task_id = self.request.id
-    logger.info("[TASK %s] processing %s", task_id, file_path)
+    fields = extract_fields(clean)
+    items = extract_items(clean)
+    warnings = build_warnings(fields, items)
 
-    try:
-        raw = extract_text_from_pdf(file_path)
+    # OPTIONAL LLM fallback
+    llm = get_llm()
+    if llm is not None and _needs_llm(fields, items, warnings):
+        try:
+            current = {"fields": fields, "items": items}
+            patch = llm.repair(clean, current) or {}
 
-        # OCR fallback if text is empty/too short
-        if not raw or len(raw.strip()) < 30:
-            raw = ocr_pdf_if_needed(file_path) or raw or ""
+            # merge patch safely
+            if isinstance(patch.get("fields"), dict):
+                fields.update({k: v for k, v in patch["fields"].items() if v is not None})
+            if isinstance(patch.get("items"), list) and patch["items"]:
+                items = patch["items"]
 
-        clean = normalize_text(raw)
+            warnings = build_warnings(fields, items)
+            warnings.append("LLM repair applied (optional).")
+        except Exception as e:
+            warnings.append(f"LLM repair failed (ignored): {type(e).__name__}: {e}")
 
-        llm = get_llm()
-        agent_out = run_agent(
-            clean,
-            llm=llm,
-            config=AgentConfig(max_repairs=1, tol=0.01),
-        )
+    result = {
+        "raw_text": raw,
+        "normalized_text": clean,
+        "fields": fields,
+        "items": items,
+        "warnings": warnings,
+    }
 
-        result: Dict[str, Any] = {
-            "raw_text": raw,
-            "normalized_text": clean,
-            "fields": agent_out.get("fields", {}),
-            "items": agent_out.get("items", []),
-            "warnings": agent_out.get("warnings", []),
-            "debug": agent_out.get("debug", {}),
-        }
-
-        save_result(task_id, result)
-        logger.info(
-            "[TASK %s] done, chars=%s, items=%s, warnings=%s",
-            task_id, len(clean), len(result["items"]), len(result["warnings"])
-        )
-        return result
-
-    except Exception as e:
-        # Save failure result so API can show it
-        err = {"error": str(e), "file_path": file_path}
-        save_result(task_id, {"status": "failed", **err})
-        logger.exception("[TASK %s] failed: %s", task_id, e)
-        raise
+    save_result(process_invoice_task.request.id, result)
+    print(f"[TASK] done, chars={len(clean)}, items={len(items)}, warnings={len(warnings)}")
+    return result
