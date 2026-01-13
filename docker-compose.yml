@@ -1,3 +1,8 @@
+## curl "http://localhost:8000/tasks/6f598cca-ad91-4ab1-9845-7532702b1328"
+## curl "http://localhost:8000/tasks/9244ec41-5c9d-42d9-8c9e-99bf5b5c12af"
+## curl -F "file=@samples/invoices/sample1.pdf" http://localhost:8000/invoices
+## curl "http://localhost:8000/tasks/5d1440c1-98ad-4713-977b-a61d0cfd92c7"
+#version: "3.9"
 services:
   redis:
     image: redis:7-alpine
@@ -14,6 +19,8 @@ services:
       - "8000:8000"
     depends_on:
       - redis
+    volumes:
+      - invoice_tmp:/tmp/invoices
 
   worker:
     build:
@@ -23,3 +30,9 @@ services:
       - .env.example
     depends_on:
       - redis
+    volumes:
+      - invoice_tmp:/tmp/invoices
+    user: "1000:1000"
+
+volumes:
+  invoice_tmp:

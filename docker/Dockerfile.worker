@@ -1,6 +1,22 @@
 FROM python:3.11-slim
+
 WORKDIR /app
+
+# System deps for OCR / PDF rendering
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    tesseract-ocr \
+    poppler-utils \
+    && rm -rf /var/lib/apt/lists/*
+
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
+
 COPY app ./app
+
+# non-root user (uid=1000 gid=1000)
+RUN addgroup --gid 1000 app \
+ && adduser --uid 1000 --gid 1000 --disabled-password app
+
+USER app
+
 CMD ["celery", "-A", "app.workers.celery_app.celery_app", "worker", "--loglevel=INFO"]

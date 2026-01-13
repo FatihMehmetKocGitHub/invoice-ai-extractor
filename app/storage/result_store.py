@@ -1,14 +1,25 @@
 import json
+import os
+from typing import Any, Optional
+
 import redis
-from typing import Any, Dict, Optional
 
-class ResultStore:
-    def __init__(self, redis_url: str):
-        self.r = redis.Redis.from_url(redis_url, decode_responses=True)
+REDIS_URL = os.getenv("REDIS_URL", "redis://redis:6379/2")
+KEY_PREFIX = "invoice_result:"
 
-    def set(self, key: str, value: Dict[str, Any], ttl: int = 3600) -> None:
-        self.r.setex(key, ttl, json.dumps(value))
 
-    def get(self, key: str) -> Optional[Dict[str, Any]]:
-        v = self.r.get(key)
-        return json.loads(v) if v else None
+def _client() -> redis.Redis:
+    return redis.Redis.from_url(REDIS_URL, decode_responses=True)
+
+
+def save_result(task_id: str, result: Any) -> None:
+    r = _client()
+    r.set(f"{KEY_PREFIX}{task_id}", json.dumps(result, ensure_ascii=False))
+
+
+def get_result(task_id: str) -> Optional[Any]:
+    r = _client()
+    raw = r.get(f"{KEY_PREFIX}{task_id}")
+    if raw is None:
+        return None
+    return json.loads(raw)

@@ -1,12 +1,31 @@
-import uuid
 from fastapi import APIRouter, UploadFile, File
-from app.api.schemas.invoice import InvoiceResponse
-from app.workers.tasks import process_invoice
+import os
+import uuid
+
+from app.workers.celery_app import celery_app
 
 router = APIRouter()
 
-@router.post("/invoices", response_model=InvoiceResponse)
+
+@router.post("/invoices")
 async def create_invoice(file: UploadFile = File(...)):
-    # demo: sadece dosya adını işliyoruz (gerçekte temp storage vs)
-    task = process_invoice.delay(file.filename)
-    return InvoiceResponse(task_id=task.id, status="queued")
+    # 1️⃣ temp klasörü garanti altına al
+    os.makedirs("/tmp/invoices", exist_ok=True)
+
+    # 2️⃣ benzersiz dosya adı
+    file_id = str(uuid.uuid4())
+    file_path = f"/tmp/invoices/{file_id}_{file.filename}"
+
+    # 3️⃣ dosyayı diske yaz
+    contents = await file.read()
+    with open(file_path, "wb") as f:
+        f.write(contents)
+
+    # 4️⃣ Celery task'i NAME ile gönder (doğru yol)
+    task = celery_app.send_task(
+        "process_invoice_task",
+        args=[file_path],
+    )
+
+    # 5️⃣ task id dön
+    return {"task_id": task.id}
