@@ -4,10 +4,10 @@ import json
 import requests
 from typing import Any, Dict
 
-from app.services.llm.base import LLMClient
+from app.services.llm.base import LLM
 
 
-class OllamaLLM(LLMClient):
+class OllamaLLM(LLM):
     def __init__(self, base_url: str, model: str):
         self.base_url = base_url.rstrip("/")
         self.model = model
