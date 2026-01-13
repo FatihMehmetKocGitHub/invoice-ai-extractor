@@ -1,36 +1,29 @@
-Invoice AI Extractor
-# Invoice AI Extractor
+📄 Invoice AI Extractor
 
-Asynchronous invoice (PDF) processing service with **OCR support**, **rule-based extraction**, and **optional LLM fallback**.
+Asynchronous invoice (PDF) processing service with OCR support, rule-based extraction, and optional LLM fallback.
 
-The API accepts invoice PDFs, processes them asynchronously with Celery, extracts structured data (fields + line items), and returns results via task polling.
+This project exposes a REST API that accepts invoice PDFs, processes them asynchronously using Celery workers, extracts structured invoice data (fields and line items), and returns results via task polling.
 
-## Architecture
-
+🏗 Architecture
 
 Client
-|
-v
-FastAPI (API) --> enqueues task
-|
-v
+  |
+  v
+FastAPI (API)  ---> enqueue task
+  |
+  v
 Redis (broker + result backend)
-|
-v
+  |
+  v
 Celery Worker
+  ├─ PDF text extraction (Poppler)
+  ├─ OCR fallback (Tesseract)
+  ├─ Text normalization
+  ├─ Rule-based field & item extraction
+  ├─ Validation & warnings
+  └─ (Optional) LLM-based repair fallback
 
-PDF text extraction (Poppler)
-
-OCR fallback (Tesseract)
-
-Text normalization
-
-Rule-based field & item extraction
-
-Validation & warnings
-
-(Optional) LLM repair fallback
-How to Run
+▶️ How to Run
 Prerequisites
 
 Docker
@@ -45,10 +38,18 @@ docker compose build --no-cache
 docker compose up -d
 
 Verify Services
-
 docker compose ps
 
-API Usage
+You should see:
+
+api
+
+worker
+
+redis
+all in Up state.
+
+📡 API Usage
 Upload Invoice PDF
 
 Send a PDF file to be processed asynchronously.
@@ -56,18 +57,15 @@ Send a PDF file to be processed asynchronously.
 curl -F "file=@samples/invoices/sample1.pdf" \
 http://localhost:8000/invoices
 
+
 Response
 
 {
   "task_id": "3ea5aa93-57cf-4f4c-9f80-c87a4f14de4a"
 }
 
-Poll Task Result
-Use the returned task_id to retrieve processing status and result.
-curl http://localhost:8000/tasks/3ea5aa93-57cf-4f4c-9f80-c87a4f14de4a
-
-
 Completed Response
+
 {
   "status": "done",
   "result": {
@@ -92,15 +90,15 @@ Completed Response
   }
 }
 
-🧠 LLM Usage (Optional)
 
+🧠 LLM Usage (Optional)
 ⚠️ Important Note
 
 This project does NOT require an LLM to function.
 
 Default behavior uses rule-based extraction
 
-LLM integration is optional and pluggable
+LLM integration is optional, disabled by default
 
 Designed for environments where:
 
@@ -108,26 +106,44 @@ LLM access is restricted
 
 Deterministic output is required
 
-Cost or latency matters
+Cost and latency matter
 
 Why LLM Is Optional
 
-Core invoice fields (totals, dates, items) are highly structured
+Invoice data is highly structured
 
-Rule-based extraction is faster, cheaper, and more predictable
+Rule-based extraction is:
 
-Architecture allows adding LLMs later without refactoring
-Testing
+Faster
+
+Cheaper
+
+More predictable
+
+Architecture allows adding or removing LLMs without refactoring core logic
+
+Enabling LLM (Optional)
+
+USE_LLM=1
+LLM_PROVIDER=ollama
+OLLAMA_BASE_URL=http://host.docker.internal:11434
+OLLAMA_MODEL=llama3.1
+
+If USE_LLM=0 (default), no LLM code or dependencies are executed.
+
+🧪 Testing
+
 pytest
-Security Notes
 
-Worker runs as non-root user (uid=1000)
+🔐 Security Notes
 
-File uploads are stored in isolated temp volume
+Celery worker runs as non-root user (uid=1000)
+
+Uploaded files are stored in an isolated temp volume
 
 No external network calls required by default
 
-Tech Stack
+🧰 Tech Stack
 
 FastAPI
 
@@ -141,11 +157,18 @@ Poppler
 
 Docker / Docker Compose
 
-Project Status
+📌 Project Status
 
 ✅ Fully functional
+
 ✅ Async processing
+
+✅ Rule-based by default
+
+✅ Optional LLM support
+
 ✅ Production-ready architecture
+
 ✅ Assessment-ready
 
 🧷 License
