@@ -1,4 +1,7 @@
-📄 Invoice AI Extractor
+AI-powered Invoice Data Extraction (OCR + LLM)
+
+This project extracts structured and validated data from invoices and PDF documents.
+It is designed for real-world accounting and automation use cases.
 
 Asynchronous invoice (PDF) processing service with OCR support, rule-based extraction, and optional LLM fallback.
 
